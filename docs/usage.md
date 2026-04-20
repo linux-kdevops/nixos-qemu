@@ -152,6 +152,13 @@ consumers override it to their project name. The module also
 sets the serial-console break-glass root password. Workflow-driven
 nodes import it; hand-development nodes do not.
 
+`nixosModules.shares` (`modules/shares.nix`) turns a set of
+virtiofs shares into `fileSystems` entries. Each share is keyed by
+its mount point and declares the virtiofs `tag` announced by the
+host and optional mount `options`. The module does nothing else:
+overlays, XDG env vars, and directory creation stay the consumer's
+responsibility. See "Host configuration via virtiofs" for usage.
+
 `nixosModules.devel` (`modules/devel.nix`) adds kernel testing and
 storage tools, grouped by purpose: filesystem and block layer tooling
 (xfstests, xfsprogs, btrfs-progs, e2fsprogs, lvm2, parted), NVMe and
@@ -414,6 +421,21 @@ environment.variables.XDG_CONFIG_HOME = "/etc/xdg-host";
 environment.variables.XDG_CONFIG_DIRS = lib.mkForce "/etc/xdg-host:/etc/xdg";
 ```
 
+Or declare it through the shares module:
+
+```nix
+imports = [ nixos-qemu.nixosModules.shares ];
+
+nixos-qemu.shares."/etc/xdg-host" = { tag = "xdg"; };
+
+environment.variables.XDG_CONFIG_HOME = "/etc/xdg-host";
+environment.variables.XDG_CONFIG_DIRS = lib.mkForce "/etc/xdg-host:/etc/xdg";
+```
+
+The module replaces only the `fileSystems` entry. The XDG env vars
+stay in the consumer's module because they are a policy choice tied
+to one specific share's role, not a generic virtiofs concern.
+
 `XDG_CONFIG_HOME` is the primary config directory that all
 XDG-compliant tools check first. Some tools (like helix) only
 read from `XDG_CONFIG_HOME` and do not fall back to
@@ -564,6 +586,18 @@ systemd.services."prepare-root-overlay" = {
     ExecStart = "${pkgs.coreutils}/bin/mkdir --parents /.root-overlay/upper /.root-overlay/work";
   };
 };
+```
+
+The read-only base mount can also be declared through the shares
+module, leaving the overlay and prepare-root-overlay service in the
+consumer's module:
+
+```nix
+imports = [ nixos-qemu.nixosModules.shares ];
+
+nixos-qemu.shares."/mnt/home" = { tag = "home"; options = [ "ro" ]; };
+
+# Overlay and prepare-root-overlay service as above.
 ```
 
 The virtiofsd instance on the host shares the home directory with

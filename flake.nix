@@ -34,6 +34,7 @@
       devel = ./modules/devel.nix;
       imageless = ./modules/imageless.nix;
       libvirt = ./modules/libvirt.nix;
+      shares = ./modules/shares.nix;
       user = ./modules/user.nix;
     };
 
