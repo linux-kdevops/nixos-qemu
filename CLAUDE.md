@@ -25,6 +25,7 @@ nixos-qemu/
 │   ├── libvirt.nix        Disk-image boot (grub on vda, DHCP, nix+flakes), standalone
 │   ├── user.nix           Opt-in unprivileged account with configurable name (options.nixos-qemu.user)
 │   ├── shares.nix         Opt-in virtiofs shares (options.nixos-qemu.shares)
+│   ├── storage.nix        Opt-in block-device mounts with optional mkfs (options.nixos-qemu.storage)
 │   └── devel.nix          Development profile (kernel testing tools)
 ├── pkgs/
 │   ├── default.nix        Custom packages via callPackage

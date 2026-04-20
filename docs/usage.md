@@ -159,6 +159,14 @@ host and optional mount `options`. The module does nothing else:
 overlays, XDG env vars, and directory creation stay the consumer's
 responsibility. See "Host configuration via virtiofs" for usage.
 
+`nixosModules.storage` (`modules/storage.nix`) turns a set of
+block devices into `fileSystems` entries. Each entry is keyed by
+mount point with fields `device`, `fsType`, `options`, `mkfsArgs`,
+and `autoFormat`. Set `mkfsArgs` for a pre-mount `mkfs` oneshot
+with custom arguments, or `autoFormat = true` for NixOS's default
+first-mount formatting (the two are mutually exclusive). See
+"Block device filesystems" for usage.
+
 `nixosModules.devel` (`modules/devel.nix`) adds kernel testing and
 storage tools, grouped by purpose: filesystem and block layer tooling
 (xfstests, xfsprogs, btrfs-progs, e2fsprogs, lvm2, parted), NVMe and
@@ -657,6 +665,38 @@ fileSystems."/mnt/nvme0" = {
 NixOS generates the mount unit name from the path (`/mnt/nvme0`
 becomes `mnt-nvme0.mount`). The ordering chain is: device appears,
 format service runs mkfs, mount unit mounts the filesystem.
+
+### Using the storage module
+
+The storage module consolidates multiple extra drives into one
+attrset keyed by mount point. Devices with `mkfsArgs` go through a
+pre-mount format oneshot guarded by `blkid --probe`; devices with
+`autoFormat = true` fall through to NixOS's own first-mount
+format machinery; devices with neither are assumed pre-formatted:
+
+```nix
+imports = [ nixos-qemu.nixosModules.storage ];
+
+nixos-qemu.storage = {
+  "/mnt/nvme0" = {
+    device = "/dev/nvme0n1";
+    fsType = "xfs";
+    mkfsArgs = [ "-b" "size=16k" "-s" "size=16k" ];
+  };
+  "/mnt/nvme1" = {
+    device = "/dev/nvme1n1";
+    fsType = "xfs";
+    autoFormat = true;
+  };
+  "/mnt/data" = {
+    device = "/dev/vdb";
+    fsType = "ext4";
+  };
+};
+```
+
+`mkfsArgs` and `autoFormat` are mutually exclusive; an assertion
+rejects configurations that set both.
 
 ## Multiple configurations
 
