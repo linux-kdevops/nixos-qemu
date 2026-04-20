@@ -1,19 +1,21 @@
 # nixos-qemu
 
-NixOS flake for imageless boot via virtiofs. The host shares
-/nix/store read-only into the guest via virtiofsd. NixOS builds a
-systemd initramfs that mounts the store and switch-roots into the
-system closure. Root is tmpfs: ephemeral, lost on shutdown.
+NixOS modules, overlays, and templates for building QEMU VMs. The
+flake exposes two backend modules that differ in how the guest
+boots:
+
+- **imageless**: tmpfs root, systemd initramfs, external kernel,
+  `/nix/store` and `/lib/modules` mounted via virtiofs from the
+  host. No disk image, nothing persists across boots.
+- **libvirt**: qcow2 root disk exposed as `/dev/vda`, grub
+  bootloader, NixOS-built kernel, DHCP from libvirt's default
+  network.
+
+Both compose with four opt-in modules (`user`, `shares`, `storage`,
+`devel`) so a configuration can be minimal or carry the full kernel
+testing toolchain.
 
 **License**: copyleft-next-0.3.1
-
-## Features
-
-- **No disk image**: root is tmpfs, operating system from /nix/store
-- **External kernel**: `boot.kernel.enable = false`, no kernel in the closure
-- **Minimal closure**: imports `profiles/minimal.nix`, ~200 MB
-- **Declarative**: rebuild with `nix build`, get a new system closure
-- **Extensible**: overlays for package customization, template for new configurations
 
 ## Prerequisites
 
@@ -27,27 +29,42 @@ echo 'experimental-features = nix-command flakes' >> ~/.config/nix/nix.conf
 
 ## Quick start
 
-Build the NixOS system closure:
+Validate that both backends evaluate and build:
 
 ```shell
-nix build .#nixosConfigurations.vm.config.system.build.toplevel
+nix flake check
+```
+
+Build a single backend closure:
+
+```shell
+nix build .#checks.x86_64-linux.imageless    # or .libvirt
 readlink --canonicalize result
 ```
 
-The `result` symlink points to the system closure. The `boot.json`
-file inside the closure contains the `init` and `initrd` paths
-needed to configure QEMU:
+The `result` symlink points to the system closure. For imageless,
+`result/boot.json` contains the `init` and `initrd` paths needed to
+configure QEMU:
 
 ```shell
 cat result/boot.json
 ```
 
-To create a custom configuration with additional packages or NixOS
-options, see [docs/usage.md](docs/usage.md).
+To create a downstream configuration, use a template:
+
+```shell
+nix flake init --template "github:linux-kdevops/nixos-qemu#imageless"
+nix flake init --template "github:linux-kdevops/nixos-qemu#libvirt"
+```
+
+See [docs/usage.md](docs/usage.md) for customizing packages and
+NixOS options.
 
 ## How it boots
 
-This project builds two artifacts: a NixOS system closure and a
+### Imageless
+
+This backend builds two artifacts: a NixOS system closure and a
 systemd initramfs. Booting requires an external kernel and QEMU
 with virtiofsd sharing the host's `/nix/store` and `/lib/modules`
 into the guest.
@@ -75,15 +92,25 @@ root (tmpfs), `/nix/store` (virtiofs tag `store`), and
 the system closure. The `init=` and `initrd` paths change on
 every rebuild and are available in `result/boot.json`.
 
+### Libvirt
+
+This backend builds a full NixOS system closure including its own
+kernel. The consumer supplies a qcow2 disk image containing the
+closure; libvirt presents it to the guest as `/dev/vda`. Grub on
+the MBR loads the kernel, initramfs mounts the ext4 root from
+`/dev/vda1`, and systemd activation proceeds normally. Networking
+comes up via DHCP from libvirt's default network (typically
+`192.168.122.0/24`).
+
 ## Documentation
 
 | Document | Content |
 |---|---|
-| [docs/usage.md](docs/usage.md) | Configurations, overlays, packages, home overlay, NVMe filesystems |
-| [docs/design-decisions.md](docs/design-decisions.md) | Initramfs approaches, systemd initrd, tmpfs root, virtiofs |
+| [docs/usage.md](docs/usage.md) | Configurations, modules, overlays, packages, home overlay, block-device filesystems |
+| [docs/design-decisions.md](docs/design-decisions.md) | Imageless and libvirt boot model, upstream references |
 
 ## Related work
 
-- [run-kernel](https://github.com/metaspace/run-kernel). Rust init + NixOS boot via virtiofs. The direct inspiration for this project's boot model.
+- [run-kernel](https://github.com/metaspace/run-kernel). Rust init + NixOS boot via virtiofs. The direct inspiration for the imageless boot model.
 - [nixos-shell](https://github.com/Mic92/nixos-shell). Nix-based lightweight QEMU VMs with host mounts.
 - [kernel-development-flake](https://github.com/jordanisaacs/kernel-development-flake). Nix flake for Linux kernel development with QEMU.

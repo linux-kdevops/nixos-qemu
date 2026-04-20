@@ -8,11 +8,20 @@
 # a systemd initramfs that mounts root (tmpfs), /nix/store, and
 # /lib/modules before switch-root.
 #
-# Password auth and networkd DHCP for development convenience.
+# Key-only SSH. Root password is serial-console break-glass only.
 { pkgs, lib, modulesPath, ... }: {
   imports = [ (modulesPath + "/profiles/minimal.nix") ];
 
   system.stateVersion = "25.11";
+
+  services.openssh = {
+    enable = true;
+    settings = {
+      PermitRootLogin = lib.mkDefault "yes";
+      PubkeyAuthentication = true;
+      PasswordAuthentication = lib.mkDefault false;
+    };
+  };
 
   # Root as tmpfs: ephemeral, no disk image. systemd in the initramfs
   # creates this from root=tmpfs on the kernel command line.
@@ -74,12 +83,6 @@
   boot.initrd.availableKernelModules = lib.mkForce [];
   boot.initrd.kernelModules = lib.mkForce [];
 
-  # Serial console on ttyS0 (journal) and hvc0 (interactive).
-  # ttyS0 captures all output to the systemd journal via -serial
-  # mon:stdio. hvc0 is a virtio console on a unix socket for
-  # interactive access (socat). Last console= gets kernel messages.
-  boot.kernelParams = [ "console=ttyS0,115200" "console=hvc0" ];
-
   # Serial getty on hvc0 for interactive login via the console socket.
   # hvc0 is a virtio console, handled by systemd's serial-getty@ template
   # (the plain getty@ template is VT-only, gated on /dev/tty0).
@@ -89,16 +92,7 @@
     wantedBy = [ "getty.target" ];
   };
 
-  # SSH with password auth (root:root).
-  services.openssh = {
-    enable = true;
-    settings = {
-      PermitRootLogin = "yes";
-      PasswordAuthentication = true;
-    };
-  };
-
-  # Root password. Reset to "root" on every boot (tmpfs root).
+  # Serial-console break-glass. Tmpfs root resets it every boot.
   users.mutableUsers = false;
   users.users.root.initialPassword = "root";
 

@@ -1,17 +1,23 @@
 # SPDX-License-Identifier: copyleft-next-0.3.1
 #
-# Minimal NixOS flake for imageless boot via virtiofs.
+# Library flake: NixOS modules (imageless, libvirt, user, devel),
+# overlays, templates, and custom packages for QEMU VMs.
 #
-# Build the system closure:
-#   nix build .#nixosConfigurations.vm.config.system.build.toplevel
+# Validate both backends:
+#   nix flake check
+#
+# Build a single backend closure:
+#   nix build .#checks.x86_64-linux.imageless
+#   nix build .#checks.x86_64-linux.libvirt
 #
 # Build an individual custom package:
 #   nix build .#cpupower
 #
-# The result symlink points to the system closure in /nix/store.
-# The NixOS init is at: $(readlink --canonicalize result)/init
+# Create a downstream configuration:
+#   nix flake init --template "github:linux-kdevops/nixos-qemu"
+#   nix flake init --template "github:linux-kdevops/nixos-qemu#libvirt"
 {
-  description = "NixOS flake for imageless boot via virtiofs";
+  description = "NixOS modules and overlays for QEMU VMs";
 
   inputs.nixpkgs.url = "github:NixOS/nixpkgs/nixos-25.11";
 
@@ -25,15 +31,24 @@
       }));
   in {
     nixosModules = {
-      default = ./configuration.nix;
       devel = ./modules/devel.nix;
+      imageless = ./modules/imageless.nix;
+      libvirt = ./modules/libvirt.nix;
+      user = ./modules/user.nix;
     };
 
     overlays.default = import ./overlays;
 
-    templates.default = {
-      path = ./templates/devel;
-      description = "NixOS VM with custom packages for kernel development";
+    templates = {
+      default = self.templates.imageless;
+      imageless = {
+        path = ./templates/imageless;
+        description = "Imageless NixOS VM (tmpfs root, virtiofs /nix/store, external kernel)";
+      };
+      libvirt = {
+        path = ./templates/libvirt;
+        description = "Libvirt-managed disk-image NixOS VM";
+      };
     };
 
     # Expose the custom packages as direct flake outputs so they can be
@@ -42,12 +57,19 @@
       inherit (pkgs) cpupower damo libbpf-tools nfstest pynfs xnvme;
     });
 
-    nixosConfigurations.vm = nixpkgs.lib.nixosSystem {
-      system = "x86_64-linux";
-      modules = [
-        self.nixosModules.default
-        { nixpkgs.overlays = [ self.overlays.default ]; }
-      ];
-    };
+    # Per-backend system closures exercised by nix flake check.
+    checks = nixpkgs.lib.genAttrs systems (system:
+      let
+        buildBackend = module: (nixpkgs.lib.nixosSystem {
+          inherit system;
+          modules = [
+            module
+            { nixpkgs.overlays = [ self.overlays.default ]; }
+          ];
+        }).config.system.build.toplevel;
+      in {
+        imageless = buildBackend self.nixosModules.imageless;
+        libvirt = buildBackend self.nixosModules.libvirt;
+      });
   };
 }

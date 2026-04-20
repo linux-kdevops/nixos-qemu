@@ -5,43 +5,29 @@ Downstream projects consume these as a flake input to build their
 own NixOS system closures. This document covers building, creating
 configurations, and customizing packages.
 
-## Building the base configuration
+## Validating the library
 
-The flake exports a minimal NixOS configuration as
-`nixosConfigurations.vm`. Build it directly to get a system closure
-with SSH, networkd, and coreutils:
+`nix flake check` evaluates and builds both backends so you can
+verify the modules still produce a valid system closure:
 
 ```shell
-nix build .#nixosConfigurations.vm.config.system.build.toplevel
+nix flake check
+```
+
+To build a single backend directly:
+
+```shell
+nix build .#checks.x86_64-linux.imageless
+nix build .#checks.x86_64-linux.libvirt
 readlink --canonicalize result
 ```
 
 The `result` symlink points to the system closure in `/nix/store`.
-The NixOS init is at `<closure>/init`. The `init=` path contains
-a Nix store hash that changes on every rebuild.
+The NixOS init is at `<closure>/init`. The `init=` path contains a
+Nix store hash that changes on every rebuild.
 
-This is useful for CI or quick validation. For kernel development,
-create a custom configuration that includes the development profile
-and additional packages.
-
-### Inspecting the closure
-
-List all binaries available in the closure:
-
-```shell
-ls result/sw/bin/
-```
-
-List the configured package names from all NixOS modules:
-
-```shell
-nix eval .#nixosConfigurations.vm.config.environment.systemPackages \
-    --apply 'map (p: p.name)' --json | python3 -m json.tool
-```
-
-The first shows what is actually in the system `$PATH`. The second
-shows what `environment.systemPackages` declares across all
-imported modules.
+For kernel development, create a downstream configuration from a
+template; see the next section.
 
 List all files installed by a package (equivalent to
 `dpkg --listfiles` on Debian):
@@ -80,7 +66,7 @@ local source checkouts:
 nix flake init --template "path:$PWD/../.."
 ```
 
-`nix flake init` copies `templates/devel/flake.nix` into the
+`nix flake init` copies `templates/imageless/flake.nix` into the
 current directory. The copied file is independent of the template:
 future changes to the upstream template do not update your copy.
 The link between your configuration and nixos-qemu is the
@@ -122,7 +108,7 @@ input and imports its modules works as a configuration:
     nixosConfigurations.vm = nixpkgs.lib.nixosSystem {
       system = "x86_64-linux";
       modules = [
-        nixos-qemu.nixosModules.default
+        nixos-qemu.nixosModules.imageless
         nixos-qemu.nixosModules.devel
         {
           nixpkgs.overlays = [ nixos-qemu.overlays.default ];
@@ -142,14 +128,29 @@ pull a second copy of nixpkgs.
 
 ### What the modules provide
 
-`nixosModules.default` (`configuration.nix`) declares the base
-NixOS system:
+`nixosModules.imageless` (`modules/imageless.nix`) declares the
+imageless base NixOS system:
 
 - Root as tmpfs (`fileSystems."/" = lib.mkImageMediaOverride { fsType = "tmpfs"; }`)
-- SSH with password auth (`root`/`root`, reset on every boot)
+- Key-only SSH; root carries a known initial password (`root`)
+  for serial-console break-glass only
 - systemd-networkd with DHCP on `en*` interfaces
 - No bootloader, no kernel (external, `boot.kernel.enable = false`)
 - Firewall disabled, unnecessary services disabled
+
+`nixosModules.libvirt` (`modules/libvirt.nix`) is the disk-image
+counterpart: grub on `/dev/vda`, ext4 root, DHCP through
+scripted networking, nix with flakes, and weekly garbage
+collection. Each backend module is standalone (no cross-import);
+both set `system.stateVersion` and the sshd posture inline.
+
+`nixosModules.user` (`modules/user.nix`) adds an opt-in
+unprivileged account in `wheel`, `libvirt`, and `kvm` with
+passwordless sudo. The account name is parametric through
+`options.nixos-qemu.user.name` (default `user`); downstream
+consumers override it to their project name. The module also
+sets the serial-console break-glass root password. Workflow-driven
+nodes import it; hand-development nodes do not.
 
 `nixosModules.devel` (`modules/devel.nix`) adds kernel testing and
 storage tools, grouped by purpose: filesystem and block layer tooling
@@ -173,7 +174,7 @@ Refresh it to pick up upstream package and module changes:
 ```shell
 nix flake update
 git add flake.lock
-nix build .#nixosConfigurations.vm.config.system.build.toplevel
+nix flake check
 ```
 
 `flake.lock` must be tracked by git for the updated revision to

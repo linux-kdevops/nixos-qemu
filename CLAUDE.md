@@ -2,10 +2,12 @@
 
 ## Project Overview
 
-NixOS flake for imageless boot via virtiofs. Builds a NixOS system
-closure and systemd initramfs that run from the host's /nix/store
-shared read-only into the guest. Root is tmpfs (ephemeral). The
-kernel is provided externally. NixOS builds the initramfs.
+Library flake of NixOS modules, overlays, and templates for
+building QEMU VMs. Two backend modules: `imageless` (tmpfs root,
+systemd initramfs, external kernel, `/nix/store` and
+`/lib/modules` via virtiofs) and `libvirt` (qcow2 disk root, grub,
+NixOS-built kernel). Four opt-in modules compose on top: `user`,
+`shares`, `storage`, `devel`.
 
 **License**: copyleft-next-0.3.1
 
@@ -13,13 +15,15 @@ kernel is provided externally. NixOS builds the initramfs.
 
 ```
 nixos-qemu/
-├── flake.nix              Flake (nixosModules, overlays, templates, vm)
-├── configuration.nix      NixOS module (tmpfs root, SSH, networkd)
+├── flake.nix              Flake (nixosModules, overlays, templates, packages, checks)
 ├── flake.lock             Pinned nixpkgs revision
 ├── docs/
 │   ├── usage.md             Configurations, overlays, packages, updating
 │   └── design-decisions.md  Hardcoded choices and upstream references
 ├── modules/
+│   ├── imageless.nix      Imageless boot (tmpfs root, virtiofs, networkd), standalone
+│   ├── libvirt.nix        Disk-image boot (grub on vda, DHCP, nix+flakes), standalone
+│   ├── user.nix           Opt-in unprivileged account with configurable name (options.nixos-qemu.user)
 │   └── devel.nix          Development profile (kernel testing tools)
 ├── pkgs/
 │   ├── default.nix        Custom packages via callPackage
@@ -34,7 +38,8 @@ nixos-qemu/
 │   ├── fio.nix            fio with liburing + test suite + examples
 │   └── xfstests.nix       Bump xfstests to 2026.03.20
 ├── templates/
-│   └── devel/flake.nix    Template for nix flake init --template
+│   ├── imageless/flake.nix  Imageless starter (default)
+│   └── libvirt/flake.nix    Libvirt disk-image starter
 ├── LICENSES/
 │   └── preferred/copyleft-next-0.3.1
 ├── COPYING                License overview and dual-licensing guidance
@@ -57,31 +62,41 @@ NEVER use short flags when a long-form alternative exists.
 
 ## Rules
 
-### External kernel, NixOS-built initramfs
+### Imageless: external kernel, NixOS-built initramfs
 
 `boot.kernel.enable = false` tells NixOS not to build a kernel.
 `boot.initrd.systemd.enable = true` tells NixOS to build a systemd
 initramfs that mounts root (tmpfs), /nix/store, and /lib/modules
 via virtiofs before switch-root into the system closure.
 
-### Tmpfs root
+### Imageless: tmpfs root
 
 `fileSystems."/" = lib.mkImageMediaOverride { fsType = "tmpfs"; }`
 declares root as tmpfs. `mkImageMediaOverride` has higher priority
 than default NixOS filesystem declarations. Changes are lost on
 shutdown.
 
-### Minimal profile
+### Imageless: minimal profile
 
 `imports = [ (modulesPath + "/profiles/minimal.nix") ]` reduces the
-closure size by excluding unnecessary packages.
+closure size by excluding unnecessary packages. Libvirt does not
+import this profile; disk-image deployments expect a full system.
+
+### Libvirt: grub on /dev/vda, ext4 root
+
+`boot.loader.grub.device = "/dev/vda"` and
+`fileSystems."/" = { device = "/dev/vda1"; fsType = "ext4"; }`
+assume the standard virt-builder qcow2 layout. Consumers with
+different disk bus or partition schemes override these.
 
 ### Password auth
 
 `users.users.root.initialPassword = "root"` with
 `users.mutableUsers = false` sets the root password on every boot
-(tmpfs root resets it). SSH allows password auth for development
-convenience.
+(tmpfs root resets it). The password is a serial-console
+break-glass; SSH itself is key-only (each backend module sets
+`PasswordAuthentication = false` inline to keep modules
+standalone).
 
 ### Overlays
 
@@ -99,15 +114,16 @@ a function whose arguments are its dependencies. The overlay imports
 
 ### Templates
 
-`templates/devel/` is copied by `nix flake init --template`. It contains
-a standalone `flake.nix` that imports `nixosModules.default` and
-`overlays.default` from nixos-qemu. Users add their own packages
-and NixOS options there.
+`templates/imageless/` (default) and `templates/libvirt/` are
+copied by `nix flake init --template`. Each imports its matching
+backend plus `user`, `devel`, and `overlays.default`. Users add
+their own packages and NixOS options below.
 
 ## Build
 
 ```shell
-nix build .#nixosConfigurations.vm.config.system.build.toplevel
+nix flake check                              # both backends
+nix build .#checks.x86_64-linux.imageless    # single backend
 readlink --canonicalize result
 ```
 

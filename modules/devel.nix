@@ -8,7 +8,7 @@
 #
 # Usage in a flake:
 #   modules = [
-#     nixos-qemu.nixosModules.default
+#     nixos-qemu.nixosModules.imageless      # or .libvirt
 #     nixos-qemu.nixosModules.devel
 #     { nixpkgs.overlays = [ nixos-qemu.overlays.default ]; }
 #   ];
