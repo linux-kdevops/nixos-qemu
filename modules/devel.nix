@@ -105,7 +105,12 @@
     vim
     zellij
 
-    # Python data analysis
+    # Python: interpreter plus data analysis libraries. The bare
+    # python3 interpreter is kept next to the libraries so downstream
+    # automation (Ansible, ad-hoc scripting) can find
+    # /run/current-system/sw/bin/python3 without having to pull in a
+    # workflow module that happens to install it transitively.
+    python3
     python3Packages.matplotlib
     python3Packages.numpy
     python3Packages.pandas
