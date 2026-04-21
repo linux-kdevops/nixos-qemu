@@ -44,6 +44,7 @@
       workflows.mmtests = ./modules/workflows/mmtests.nix;
       workflows.pynfs = ./modules/workflows/pynfs.nix;
       workflows.selftests = ./modules/workflows/selftests.nix;
+      workflows.sysbench = ./modules/workflows/sysbench.nix;
     };
 
     overlays.default = import ./overlays;
