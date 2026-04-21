@@ -38,6 +38,7 @@
       shares = ./modules/shares.nix;
       storage = ./modules/storage.nix;
       user = ./modules/user.nix;
+      workflows.blktests = ./modules/workflows/blktests.nix;
       workflows.fstests = ./modules/workflows/fstests.nix;
     };
 
