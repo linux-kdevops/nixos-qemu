@@ -31,6 +31,7 @@
       }));
   in {
     nixosModules = {
+      build-tools = ./modules/build-tools.nix;
       devel = ./modules/devel.nix;
       imageless = ./modules/imageless.nix;
       libvirt = ./modules/libvirt.nix;
