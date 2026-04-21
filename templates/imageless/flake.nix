@@ -5,6 +5,12 @@
 # Create with:
 #   nix flake init --template "github:linux-kdevops/nixos-qemu"
 #   nix build .#nixosConfigurations.vm.config.system.build.toplevel
+#
+# Per-VM configuration lives in ./default.nix. This flake composes
+# the base modules, applies the overlay, and passes nixos-qemu and
+# the flake inputs through specialArgs so default.nix can import
+# additional modules (for example nixos-qemu.nixosModules.workflows.*)
+# and reference local source inputs without re-declaring them.
 {
   inputs = {
     # Local checkout preferred: downstream consumers (kdevops and
@@ -19,22 +25,18 @@
     # kmod-src = { url = "path:/home/user/src/kmod"; flake = false; };
   };
 
-  outputs = { self, nixpkgs, nixos-qemu, ... }@inputs: {
+  outputs = { self, nixpkgs, nixos-qemu, ... }@inputs:
+  let
+    system = "x86_64-linux";
+  in {
     nixosConfigurations.vm = nixpkgs.lib.nixosSystem {
-      system = "x86_64-linux";
+      inherit system;
+      specialArgs = { inherit inputs nixos-qemu; };
       modules = [
         nixos-qemu.nixosModules.imageless
         nixos-qemu.nixosModules.user
-        nixos-qemu.nixosModules.devel
-        ({ pkgs, lib, ... }: {
-          nixpkgs.overlays = [
-            nixos-qemu.overlays.default
-
-            # Build from local source (uncomment input above and line below):
-            # (final: prev: { fio = prev.fio.overrideAttrs { src = inputs.fio-src; patches = []; }; })
-            # (final: prev: { kmod = prev.kmod.overrideAttrs { src = inputs.kmod-src; }; })
-          ];
-        })
+        { nixpkgs.overlays = [ nixos-qemu.overlays.default ]; }
+        ./default.nix
       ];
     };
   };
