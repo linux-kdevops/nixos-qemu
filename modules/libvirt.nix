@@ -6,7 +6,16 @@
 # Ported from kdevops commit 3089c3fec57 by Luis Chamberlain
 # (playbooks/templates/nixos/configuration.nix.j2). Per-node content
 # (hostname, keys, 9p, cache) stays in kdevops as additional modules.
-{ pkgs, lib, ... }: {
+{ pkgs, lib, modulesPath, ... }: {
+
+  imports = [
+    # qemu-guest wires up virtio drivers, the QEMU guest agent, and
+    # the small set of host-facing services that every NixOS VM
+    # under QEMU needs. Brings the hardware setup into the module
+    # so downstream consumers do not have to hand-write a matching
+    # hardware-configuration.nix.
+    (modulesPath + "/profiles/qemu-guest.nix")
+  ];
 
   system.stateVersion = "25.11";
 
