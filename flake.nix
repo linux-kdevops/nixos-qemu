@@ -38,6 +38,7 @@
       shares = ./modules/shares.nix;
       storage = ./modules/storage.nix;
       user = ./modules/user.nix;
+      workflows.fstests = ./modules/workflows/fstests.nix;
     };
 
     overlays.default = import ./overlays;
