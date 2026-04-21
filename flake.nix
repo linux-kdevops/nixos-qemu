@@ -40,6 +40,7 @@
       user = ./modules/user.nix;
       workflows.blktests = ./modules/workflows/blktests.nix;
       workflows.fstests = ./modules/workflows/fstests.nix;
+      workflows.ltp = ./modules/workflows/ltp.nix;
       workflows.mmtests = ./modules/workflows/mmtests.nix;
       workflows.pynfs = ./modules/workflows/pynfs.nix;
       workflows.selftests = ./modules/workflows/selftests.nix;
