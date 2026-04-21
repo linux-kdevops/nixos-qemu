@@ -39,5 +39,13 @@
         ./default.nix
       ];
     };
+
+    # System closure for the imageless VM. The output directory
+    # exposes `kernel` and `initrd` symlinks consumers hand to
+    # QEMU via -kernel and -initrd; the closure itself is what
+    # virtiofsd serves to the guest as /nix/store.
+    # Run: nix build .#toplevel  (or .#packages.<system>.toplevel)
+    packages.${system}.toplevel =
+      self.nixosConfigurations.vm.config.system.build.toplevel;
   };
 }
