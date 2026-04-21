@@ -40,6 +40,7 @@
       user = ./modules/user.nix;
       workflows.blktests = ./modules/workflows/blktests.nix;
       workflows.fstests = ./modules/workflows/fstests.nix;
+      workflows.selftests = ./modules/workflows/selftests.nix;
     };
 
     overlays.default = import ./overlays;
