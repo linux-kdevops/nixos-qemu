@@ -98,7 +98,7 @@
 
   # Networking: systemd-networkd with DHCP on all ethernet interfaces.
   networking.useNetworkd = true;
-  networking.hostName = "nixos";
+  networking.hostName = lib.mkDefault "nixos";
   networking.firewall.enable = false;
   systemd.network.networks."80-ethernet" = {
     matchConfig.Name = "en*";
